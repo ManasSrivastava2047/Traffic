@@ -410,7 +410,7 @@ def analyze_video_multi_v1():
 
     lanes_out = []
     for direction, src_path, ann_path in provided:
-        metrics = analyze_video_file(model_coco, src_path, annotated_output_path=ann_path)
+        metrics = analyze_video_file(model_coco, src_path, annotated_output_path=ann_path, model_custom=model_custom)
         try:
             path_from_writer = metrics.get("annotatedOutputPath") or ann_path
             if (
@@ -443,6 +443,9 @@ def analyze_video_multi_v1():
             signal_time = int(round(raw_time))
         except Exception:
             signal_time = 33
+        # If ambulance detected in this lane, add +3s
+        if bool(metrics.get('ambulanceDetected', False)):
+            signal_time += 3
         signal_time = max(15, min(65, signal_time))
 
         lanes_out.append({
@@ -451,6 +454,8 @@ def analyze_video_multi_v1():
             'rateOfChange': metrics.get('rateOfChange', 0.0),
             'vehicleCount': metrics.get('vehicleCount', 0),
             'signalTime': signal_time,
+            'ambulanceDetected': bool(metrics.get('ambulanceDetected', False)),
+            'ambulanceBoxes': metrics.get('ambulanceBoxes', []),
             'annotatedVideo': metrics.get('annotatedVideo')
         })
 
@@ -542,7 +547,7 @@ def analyze_video_multi():
             base_annotated = f"{os.path.splitext(filename)[0]}_annotated.mp4"
             annotated_path = os.path.join(RESULT_FOLDER, base_annotated)
 
-            metrics = analyze_video_file(model_coco, filepath, annotated_output_path=annotated_path)
+            metrics = analyze_video_file(model_coco, filepath, annotated_output_path=annotated_path, model_custom=model_custom)
             try:
                 path_from_writer = metrics.get("annotatedOutputPath") or annotated_path
                 if (
@@ -560,6 +565,8 @@ def analyze_video_multi():
                 "rateOfChange": metrics.get("rateOfChange", 0.0),
                 "vehicleCount": metrics.get("vehicleCount", 0),
                 "annotatedVideo": metrics.get("annotatedVideo", None),
+                "ambulanceDetected": bool(metrics.get('ambulanceDetected', False)),
+                "ambulanceBoxes": metrics.get('ambulanceBoxes', []),
             })
         else:
             lanes.append({
@@ -616,6 +623,9 @@ def analyze_video_multi():
                 st = int(round(raw_time))
             except Exception:
                 st = 33
+            # Add 3s if ambulance detected in this lane
+            if bool(lane.get('ambulanceDetected', False)):
+                st += 3
             signal_time = max(15, min(65, st))
 
             if vcount > max_vehicle:

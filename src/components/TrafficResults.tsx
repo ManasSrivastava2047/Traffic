@@ -14,6 +14,7 @@ interface TrafficResultsProps {
   annotatedVideo?: string;
   onReset: () => void;
   vehicleCount?: number;
+  ambulanceDetected?: boolean;
 }
 
 export const TrafficResults: React.FC<TrafficResultsProps> = ({
@@ -23,6 +24,7 @@ export const TrafficResults: React.FC<TrafficResultsProps> = ({
   annotatedVideo,
   onReset,
   vehicleCount
+  , ambulanceDetected
 }) => {
   const [timeLeft, setTimeLeft] = useState(signalTime);
   const [currentPhase, setCurrentPhase] = useState<'green' | 'amber' | 'red'>('green');
@@ -176,7 +178,12 @@ export const TrafficResults: React.FC<TrafficResultsProps> = ({
           </CardHeader>
           <CardContent>
             {annotatedVideo ? (
-              <video src={annotatedVideo} className="w-full h-80 object-cover" controls />
+              <div className="space-y-2">
+                {ambulanceDetected && (
+                  <div className="mb-2 px-3 py-2 bg-red-600 text-white rounded text-sm font-semibold inline-block">Ambulance Detected</div>
+                )}
+                <video src={annotatedVideo} className="w-full h-80 object-cover" controls />
+              </div>
             ) : (
               <div className="text-sm text-muted-foreground">Annotated video will appear here after processing.</div>
             )}

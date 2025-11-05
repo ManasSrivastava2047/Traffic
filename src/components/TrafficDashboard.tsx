@@ -118,6 +118,8 @@ export const TrafficDashboard: React.FC = () => {
           annotatedVideo: ln.annotatedVideo ? `http://localhost:5000${ln.annotatedVideo}` : undefined,
           vehicleCount: ln.vehicleCount,
           direction: ln.direction,
+          ambulanceDetected: !!ln.ambulanceDetected,
+          ambulanceBoxes: Array.isArray(ln.ambulanceBoxes) ? ln.ambulanceBoxes : [],
         }));
         resolve({ signalTime: 0, lanes: lanesOut });
       } catch (err) {
