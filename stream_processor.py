@@ -211,8 +211,7 @@ class StreamProcessor:
 def analyze_video_file(model_coco: YOLO, source_path: str, vehicle_classes: Optional[set] = None,
                        target_fps: float = 4.0, slope_window_seconds: int = 10,
                        annotated_output_path: Optional[str] = None,
-                       max_seconds: Optional[int] = 8,
-                       model_custom: Optional[YOLO] = None) -> Dict[str, float]:
+                       max_seconds: Optional[int] = 8) -> Dict[str, float]:
     """
     Offline analysis for an uploaded video file. Returns summary metrics including
     vehiclesPerSecond (EMA) and rateOfChange (slope of cps over time).
@@ -272,7 +271,6 @@ def analyze_video_file(model_coco: YOLO, source_path: str, vehicle_classes: Opti
 
     try:
         processed_seconds = 0
-        ambulance_detected_overall = False
         while True:
             # Read one frame to process
             ok, frame = cap.read()
@@ -289,7 +287,6 @@ def analyze_video_file(model_coco: YOLO, source_path: str, vehicle_classes: Opti
             process_this_frame = True
 
             detected_count = 0
-            ambulance_boxes = []
             if process_this_frame:
                 # Use Ultralytics built-in tracker for stable IDs to avoid double counting
                 results = model_coco.track(
@@ -348,55 +345,6 @@ def analyze_video_file(model_coco: YOLO, source_path: str, vehicle_classes: Opti
                             pruned.append(tr)
                     active_tracks = pruned
 
-                # Run custom model (ambulance/emergency) per frame if provided
-                ambulance_in_frame = False
-                try:
-                    if model_custom is not None:
-                        results_custom = model_custom.predict(
-                            frame,
-                            imgsz=512,
-                            conf=0.25,
-                            device=("cuda" if torch.cuda.is_available() else "cpu"),
-                            verbose=False,
-                        )[0]
-                        if results_custom.boxes is not None and len(results_custom.boxes) > 0:
-                            # Determine ambulance class indices by name if available
-                            ambulance_class_idxs = set()
-                            try:
-                                names = getattr(model_custom, 'names', None)
-                                if names:
-                                    for idx, name in names.items():
-                                        if isinstance(name, str) and 'ambul' in name.lower():
-                                            ambulance_class_idxs.add(int(idx))
-                            except Exception:
-                                pass
-                            # Fallback: assume class index 0 may correspond to ambulance in some custom models
-                            if not ambulance_class_idxs:
-                                ambulance_class_idxs.add(0)
-
-                            # Inspect boxes for ambulance classes
-                            for cb in results_custom.boxes:
-                                try:
-                                    cls_val = int(cb.cls[0])
-                                except Exception:
-                                    cls_val = None
-                                if cls_val is not None and cls_val in ambulance_class_idxs:
-                                    ambulance_in_frame = True
-                                    try:
-                                        x1, y1, x2, y2 = map(int, cb.xyxy[0])
-                                        label = 'Ambulance'
-                                        conf = float(cb.conf[0]) if hasattr(cb, 'conf') and cb.conf is not None else 0.0
-                                        text = f"{label} {conf:.2f}"
-                                        ambulance_boxes.append((x1, y1, x2, y2, text))
-                                    except Exception:
-                                        pass
-                except Exception:
-                    # don't fail the pipeline for detection errors
-                    ambulance_in_frame = False
-
-                if ambulance_in_frame:
-                    ambulance_detected_overall = True
-
             # Create/write annotated frame if requested
             if annotated_output_path is not None and process_this_frame:
                 annotated_frame = results.plot()
@@ -412,24 +360,6 @@ def analyze_video_file(model_coco: YOLO, source_path: str, vehicle_classes: Opti
                             x1, y1, x2, y2 = [int(v) for v in xyxy[idx]]
                             cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 255), 2)
                             cv2.putText(annotated_frame, f"ID {tid}", (x1, max(0, y1 - 6)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
-                except Exception:
-                    pass
-                # Overlay ambulance boxes collected earlier in this frame
-                try:
-                    for (ax1, ay1, ax2, ay2, atext) in ambulance_boxes:
-                        cv2.rectangle(annotated_frame, (ax1, ay1), (ax2, ay2), (0, 0, 255), 2)
-                        try:
-                            (tw, th), baseline = cv2.getTextSize(atext, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
-                            cv2.rectangle(annotated_frame, (ax1, ay1 - th - baseline - 3), (ax1 + tw, ay1), (0, 0, 255), -1)
-                            cv2.putText(annotated_frame, atext, (ax1, ay1 - baseline - 2), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-                        except Exception:
-                            pass
-                    # If ambulance detected in this frame, add a small badge top-left
-                    if ambulance_boxes:
-                        try:
-                            cv2.putText(annotated_frame, 'AMBULANCE DETECTED', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 3)
-                        except Exception:
-                            pass
                 except Exception:
                     pass
                 if writer is None:
@@ -563,9 +493,6 @@ def analyze_video_file(model_coco: YOLO, source_path: str, vehicle_classes: Opti
         "annotatedFrames": int(frames_written),
         "annotatedOutputPath": selected_output_path or "",
         "vehicleCount": int(total_unique_vehicles),
-        "ambulanceDetected": bool(ambulance_detected_overall),
-        # ambulanceBoxes not guaranteed; empty list if none
-        "ambulanceBoxes": ambulance_boxes if 'ambulance_boxes' in locals() else [],
     }
 
 

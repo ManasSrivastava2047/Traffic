@@ -102,10 +102,12 @@ export const DriverView: React.FC = () => {
                 <h3 className="font-semibold mb-4">Traffic Status for {latest.Region_Name} / {latest.Intersection_ID}</h3>
                 {(() => {
                     const mg = parseInt(String(latest.Max_Green_Time || '0'), 10) || 0;
+                    const mv = parseInt(String(latest.Max_Vehicle_Count || '0'), 10) || 0;
                     if (mg > 55) {
                       return (
                         <div className="mt-3 p-3 bg-red-500/10 border border-red-300 rounded">
                           <div className="font-semibold text-red-600">Traffic density: Very High</div>
+                          <div>Estimated vehicles at intersection: up to {mv} vehicles.</div>
                           <div>Expect significant delays. Consider alternate routes or avoid the area if possible.</div>
                           <div className="text-sm text-muted-foreground">Emergency and priority vehicles may be given extended green time.</div>
                         </div>
@@ -115,6 +117,7 @@ export const DriverView: React.FC = () => {
                       return (
                         <div className="mt-3 p-3 bg-green-500/10 border border-green-300 rounded">
                           <div className="font-semibold text-green-700">Traffic density: Low</div>
+                          <div>Estimated vehicles at intersection: up to {mv} vehicles.</div>
                           <div>Traffic is flowing smoothly. Minimal delays expected.</div>
                           <div className="text-sm text-muted-foreground">You should be able to cross quickly. Drive safely and follow signals.</div>
                         </div>
@@ -123,6 +126,7 @@ export const DriverView: React.FC = () => {
                     return (
                       <div className="mt-3 p-3 bg-yellow-500/10 border border-yellow-300 rounded">
                         <div className="font-semibold text-yellow-800">Traffic density: Moderate</div>
+                        <div>Estimated vehicles at intersection: up to {mv} vehicles.</div>
                         <div>Some delays possible. Exercise caution and follow traffic directions.</div>
                         <div className="text-sm text-muted-foreground">Peak adjustments may be active; expect variable signal timings.</div>
                       </div>

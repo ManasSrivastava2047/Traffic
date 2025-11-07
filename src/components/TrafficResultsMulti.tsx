@@ -12,8 +12,6 @@ interface LaneResult {
   annotatedVideo?: string;
   vehicleCount?: number;
   direction?: string;
-  ambulanceDetected?: boolean;
-  ambulanceBoxes?: Array<[number, number, number, number, string]>;
 }
 
 interface TrafficResultsMultiProps {
@@ -96,17 +94,9 @@ export const TrafficResultsMulti: React.FC<TrafficResultsMultiProps> = ({ lanes,
             {title || (ln?.direction ? ln.direction.toUpperCase() : `Lane ${ln?.laneId ?? ''}`)}
           </CardTitle>
           {rightExtra}
-          {/* Debug: show how many ambulance boxes were returned for this lane (helps troubleshoot badge visibility) */}
-          <div className="ml-3 text-xs text-muted-foreground">Boxes: {Array.isArray(ln?.ambulanceBoxes) ? ln!.ambulanceBoxes.length : 0}</div>
-          {ln?.ambulanceDetected && Array.isArray(ln?.ambulanceBoxes) && ln.ambulanceBoxes.length > 0 && (
-            <div className="ml-3 px-2 py-1 bg-red-600 text-white rounded text-xs font-semibold">Ambulance Detected</div>
-          )}
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        {ln?.ambulanceDetected && Array.isArray(ln?.ambulanceBoxes) && ln.ambulanceBoxes.length > 0 && (
-          <div className="mb-2 px-3 py-2 bg-red-600 text-white rounded text-sm font-semibold inline-block">Ambulance Detected</div>
-        )}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <StatsCard
             title="Rate of Change"
