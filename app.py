@@ -14,8 +14,6 @@ from stream_processor import StreamProcessor, analyze_video_file
 from db import init_db, insert_result
 from db import fetch_latest_result
 
-
-# Initialize Flask app
 app = Flask(__name__)
 CORS(app)
 

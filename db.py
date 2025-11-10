@@ -6,7 +6,7 @@ from datetime import date, datetime
 DB_CONFIG = {
     'host': 'localhost',
     'user': 'root',
-    'password': 'Krrishsql@123',
+    'password': 'maruti2004#',
     'database': 'traffic_db',
 }
 
