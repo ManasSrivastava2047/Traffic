@@ -14,6 +14,30 @@ from stream_processor import StreamProcessor, analyze_video_file
 from db import init_db, insert_result
 from db import fetch_latest_result
 
+# Optional: Gemini (Google Generative AI) for language features
+_GEMINI_AVAILABLE = False
+try:
+	from google.generativeai import GenerativeModel, configure as gemini_configure
+	_GEMINI_AVAILABLE = True
+except Exception:
+	_GEMINI_AVAILABLE = False
+
+# Load environment from .env if present (development convenience)
+try:
+	from dotenv import load_dotenv  # type: ignore
+	load_dotenv()
+except Exception:
+	pass
+
+# Optional: LangChain Google GenAI client (alternate path using GOOGLE_API_KEY)
+_LC_GEMINI_AVAILABLE = False
+try:
+	from langchain_google_genai import ChatGoogleGenerativeAI  # type: ignore
+	from langchain_core.messages import HumanMessage  # type: ignore
+	_LC_GEMINI_AVAILABLE = True
+except Exception:
+	_LC_GEMINI_AVAILABLE = False
+
 app = Flask(__name__)
 CORS(app)
 
@@ -88,6 +112,206 @@ EMERGENCY_CLASS_IDS = _infer_emergency_class_ids(model_custom)
 
 # Initialize stream processor for live metrics
 stream_processor = StreamProcessor(model_coco)
+
+
+# -------- Language utilities via Gemini --------
+def _ensure_gemini_configured():
+	"""
+	Configure Gemini SDK if available and key present. Returns model or None.
+	"""
+	if not _GEMINI_AVAILABLE:
+		return None
+	api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+	if not api_key:
+		return None
+	try:
+		gemini_configure(api_key=api_key)
+		return GenerativeModel("gemini-1.5-flash")
+	except Exception:
+		return None
+
+def _ensure_langchain_model():
+	"""
+	Create a LangChain ChatGoogleGenerativeAI model if available and key present.
+	Returns model or None.
+	"""
+	if not _LC_GEMINI_AVAILABLE:
+		return None
+	key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
+	if not key:
+		return None
+	try:
+		# LangChain reads the key from env; ensure it's set
+		os.environ["GOOGLE_API_KEY"] = key
+		return ChatGoogleGenerativeAI(model="models/gemini-1.5-flash-latest", temperature=0.2)
+	except Exception:
+		return None
+
+
+@app.route('/api/languages', methods=['GET'])
+def api_languages():
+	"""
+	Return likely regional languages for a given Indian state.
+	Query: ?state=Karnataka
+	Always include English.
+	"""
+	state = (request.args.get('state') or '').strip()
+	if not state:
+		return jsonify({"error": "Missing 'state'"}), 400
+
+	print(f"[languages] request state='{state}'")
+	# Fallback static hints for speed and reliability; Gemini augments if available
+	# Kept intentionally minimal and safe; we still always append English.
+	base_map = {
+		"andhra pradesh": ["Telugu"],
+		"telangana": ["Telugu", "Urdu"],
+		"karnataka": ["Kannada", "Tulu"],
+		"tamil nadu": ["Tamil"],
+		"kerala": ["Malayalam"],
+		"maharashtra": ["Marathi"],
+		"gujarat": ["Gujarati"],
+		"west bengal": ["Bengali"],
+		"uttar pradesh": ["Hindi", "Urdu"],
+		"bihar": ["Hindi", "Bhojpuri", "Maithili"],
+		"madhya pradesh": ["Hindi"],
+		"rajasthan": ["Hindi"],
+		"punjab": ["Punjabi"],
+		"haryana": ["Hindi", "Punjabi"],
+		"delhi": ["Hindi", "Punjabi", "Urdu"],
+		"assam": ["Assamese", "Bengali"],
+		"odisha": ["Odia"],
+		"jharkhand": ["Hindi"],
+		"chhattisgarh": ["Hindi"],
+		"uttarakhand": ["Hindi"],
+		"himachal pradesh": ["Hindi"],
+		"goa": ["Konkani", "Marathi"],
+		"manipur": ["Meitei (Manipuri)"],
+		"meghalaya": ["Khasi", "Garo"],
+		"mizoram": ["Mizo"],
+		"nagaland": ["English", "Nagamese"],
+		"tripura": ["Bengali", "Kokborok"],
+		"sikkim": ["Nepali"],
+		"arunachal pradesh": ["Adi", "Nyishi"],
+		"jammu and kashmir": ["Kashmiri", "Urdu", "Dogri"],
+		"ladakh": ["Ladakhi"],
+	}
+
+	languages = list(base_map.get(state.lower(), []))
+
+	model = _ensure_gemini_configured()
+	if model is not None:
+		try:
+			prompt = (
+				f"List the top 3 commonly spoken regional languages in the Indian state '{state}'. "
+				"Respond as a simple comma-separated list with no numbering or extra text."
+			)
+			resp = model.generate_content(prompt)
+			text = (getattr(resp, "text", None) or "").strip()
+			print(f"[languages] gemini path text='{text}'")
+			if text:
+				for part in [p.strip() for p in text.split(",")]:
+					if part and part not in languages:
+						languages.append(part)
+		except Exception:
+			pass
+	else:
+		# Try LangChain path
+		lc = _ensure_langchain_model()
+		if lc is not None:
+			try:
+				msg = HumanMessage(content=(
+					f"List the top 3 commonly spoken regional languages in the Indian state '{state}'. "
+					"Respond as a simple comma-separated list with no numbering or extra text."
+				))
+				resp = lc.invoke([msg])
+				text = (getattr(resp, "content", None) or "").strip()
+				print(f"[languages] langchain path text='{text}'")
+				if text:
+					for part in [p.strip() for p in text.split(",")]:
+						if part and part not in languages:
+							languages.append(part)
+			except Exception:
+				pass
+
+	# Always include English (as requested)
+	if "English" not in languages:
+		languages.append("English")
+
+	# Ensure uniqueness and stable order
+	seen = set()
+	out = []
+	for lang in languages:
+		key = lang.lower()
+		if key not in seen:
+			seen.add(key)
+			out.append(lang)
+
+	return jsonify({"state": state, "languages": out})
+
+
+@app.route('/api/translate', methods=['POST'])
+def api_translate():
+	"""
+	Translate a list of texts to a target language using Gemini when available.
+	Body JSON: { "texts": [..], "targetLanguage": "Hindi" }
+	Returns: { "translations": [..] } preserving order length.
+	"""
+	data = request.get_json(silent=True) or {}
+	texts = data.get("texts") or []
+	target = (data.get("targetLanguage") or "").strip()
+	if not isinstance(texts, list) or not target:
+		return jsonify({"error": "Missing 'texts' array or 'targetLanguage'"}), 400
+
+	# Short-circuit if English target: identity
+	if target.lower() == "english":
+		return jsonify({"translations": [str(t) for t in texts]})
+
+	try:
+		first_text = (texts[0] if texts else "")[:80]
+	except Exception:
+		first_text = ""
+	print(f"[translate] target='{target}' texts={len(texts)} sample='{first_text}'")
+
+	model = _ensure_gemini_configured()
+	if model is None:
+		# Try LangChain model
+		lc = _ensure_langchain_model()
+		if lc is None:
+			# Fallback naive echo if no model configured; keeps UI functional
+			print("[translate] using fallback echo (no model configured)")
+			return jsonify({"translations": [str(t) for t in texts]})
+		print("[translate] using LangChain ChatGoogleGenerativeAI path")
+		results = []
+		for chunk in texts:
+			try:
+				prompt = (
+					f"Translate the following UI label or short sentence into {target}. "
+					"Keep meaning and tone, return only the translated text with no quotes or extra commentary.\n\n"
+					f"Text: {chunk}"
+				)
+				resp = lc.invoke([HumanMessage(content=prompt)])
+				txt = (getattr(resp, "content", None) or "").strip()
+				results.append(txt or str(chunk))
+			except Exception:
+				results.append(str(chunk))
+		return jsonify({"translations": results})
+
+	# google-generativeai path
+	print("[translate] using google-generativeai path")
+	results = []
+	for chunk in texts:
+		try:
+			prompt = (
+				f"Translate the following UI label or short sentence into {target}. "
+				"Keep meaning and tone, return only the translated text with no quotes or extra commentary.\n\n"
+				f"Text: {chunk}"
+			)
+			resp = model.generate_content(prompt)
+			txt = (getattr(resp, "text", None) or "").strip()
+			results.append(txt or str(chunk))
+		except Exception:
+			results.append(str(chunk))
+	return jsonify({"translations": results})
 
 @app.route('/api/detect', methods=['POST'])
 def detect():

@@ -1,15 +1,19 @@
 import React, { useState } from 'react';
 import { TrafficDashboard } from '@/components/TrafficDashboard';
 import { DriverView } from '@/components/DriverView';
+import LanguageSelector from '@/components/LanguageSelector';
 
 const Index = () => {
   const [role, setRole] = useState<'selector' | 'authority' | 'driver'>('selector');
 
-  if (role === 'authority') return <TrafficDashboard />;
-  if (role === 'driver') return <DriverView />;
+  if (role === 'authority') return <TrafficDashboard onBack={() => setRole('selector')} />;
+  if (role === 'driver') return <DriverView onBack={() => setRole('selector')} />;
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-bg">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-bg relative">
+      <div className="absolute top-4 right-6">
+        <LanguageSelector />
+      </div>
       <div className="space-y-8 text-center">
         <h1 className="text-3xl font-bold bg-gradient-primary bg-clip-text text-transparent">
           AI Traffic Management System

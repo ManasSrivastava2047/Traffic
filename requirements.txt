@@ -1,5 +1,9 @@
 flask
 flask-cors
+python-dotenv
+google-generativeai
+langchain-google-genai
+langchain-core
 mysql-connector-python
 ultralytics
 torch

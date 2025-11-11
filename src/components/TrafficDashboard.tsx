@@ -29,7 +29,9 @@ interface DetectionResult {
 
 type AppState = 'setup' | 'upload' | 'processing' | 'results';
 
-export const TrafficDashboard: React.FC = () => {
+import LanguageSelector from '@/components/LanguageSelector';
+
+export const TrafficDashboard: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
   // ===== State Variables =====
   const [appState, setAppState] = useState<AppState>('setup');
   const [progress, setProgress] = useState(0);
@@ -212,11 +214,17 @@ export const TrafficDashboard: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center gap-4 text-sm">
+            {onBack && (
+              <button onClick={onBack} className="px-3 py-1 rounded-md border border-border bg-transparent hover:bg-accent text-white text-sm">
+                Back
+              </button>
+            )}
             <span className="font-mono tabular-nums text-muted-foreground text-base min-w-[88px] text-right">{currentTime}</span>
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-success rounded-full animate-pulse" />
               <span className="text-success font-medium">System Online</span>
             </div>
+            <LanguageSelector />
           </div>
         </div>
       </div>

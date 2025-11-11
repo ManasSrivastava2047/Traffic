@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import LanguageSelector from '@/components/LanguageSelector';
 
 const regions = [
   'North West Delhi',
@@ -16,7 +17,7 @@ const intersections = [
   'Punjabi Bagh Crossing'
 ];
 
-export const DriverView: React.FC = () => {
+export const DriverView: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
   const [region, setRegion] = useState(regions[0]);
   const [intersectionName, setIntersectionName] = useState(intersections[0]);
   const [error, setError] = useState('');
@@ -58,7 +59,15 @@ export const DriverView: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-bg flex items-start justify-center py-12">
+    <div className="min-h-screen bg-gradient-bg flex items-start justify-center py-12 relative">
+      <div className="absolute top-4 right-6">
+        <LanguageSelector />
+      </div>
+      {onBack && (
+        <button onClick={onBack} className="absolute top-4 left-6 px-3 py-1 rounded-md border border-border bg-transparent hover:bg-accent text-white text-sm">
+          Back
+        </button>
+      )}
       <div className="w-full max-w-2xl">
         <div className="space-y-6">
           <div className="p-6 rounded-xl bg-card border border-border">
